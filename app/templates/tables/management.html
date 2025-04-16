@@ -1,0 +1,489 @@
+{% extends "base.html" %}
+
+{% block title %}Masa Yönetimi - Restoran Rezervasyon Sistemi{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="dashboard-header">
+        <h1 class="dashboard-title">Masa Yönetimi</h1>
+        <h2 class="dashboard-subtitle cursive">Masa Düzeni ve Gruplandırma</h2>
+    </div>
+    
+    <div class="table-container">
+        <div class="table-header">
+            <h3 class="table-title">Masalar</h3>
+            <button id="add-table-btn" class="btn btn-primary">Yeni Masa Ekle</button>
+        </div>
+        
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Seç</th>
+                    <th>Masa Adı</th>
+                    <th>Kapasite</th>
+                    <th>Tip</th>
+                    <th>Durum</th>
+                    <th>İşlemler</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for table in tables %}
+                <tr>
+                    <td><input type="checkbox" class="table-checkbox" data-table-id="{{ table.id }}"></td>
+                    <td>{{ table.name }}</td>
+                    <td>{{ table.capacity }}</td>
+                    <td>{{ table.type }}</td>
+                    <td>
+                        {% if table.status == 'empty' %}
+                            <span class="status-available">Boş</span>
+                        {% elif table.status == 'occupied' %}
+                            <span class="status-occupied">Dolu</span>
+                        {% elif table.status == 'reserved' %}
+                            <span class="status-reserved">Rezerve</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-secondary edit-table-btn" data-table-id="{{ table.id }}" data-table-name="{{ table.name }}" data-table-capacity="{{ table.capacity }}" data-table-type="{{ table.type }}">Düzenle</button>
+                        <button class="btn btn-sm btn-danger delete-table-btn" data-table-id="{{ table.id }}">Sil</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        
+        <div class="table-actions" style="margin-top: 20px;">
+            <button id="merge-tables-btn" class="btn btn-primary" disabled>Seçili Masaları Birleştir</button>
+        </div>
+    </div>
+    
+    <div class="table-container">
+        <div class="table-header">
+            <h3 class="table-title">Masa Grupları</h3>
+        </div>
+        
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Grup Adı</th>
+                    <th>Toplam Kapasite</th>
+                    <th>Üye Masalar</th>
+                    <th>İşlemler</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for group in table_groups %}
+                <tr>
+                    <td>{{ group.name }}</td>
+                    <td>{{ group.capacity }}</td>
+                    <td>
+                        {% set tables_in_group = db.execute('SELECT t.name FROM tables t JOIN table_group_members tgm ON t.id = tgm.table_id WHERE tgm.group_id = ?', (group.id,)).fetchall() %}
+                        {% for table in tables_in_group %}
+                            {{ table.name }}{% if not loop.last %}, {% endif %}
+                        {% endfor %}
+                    </td>
+                    <td>
+                        <form action="{{ url_for('tables.api_split_table_group', group_id=group.id) }}" method="post" style="display: inline;">
+                            <button type="submit" class="btn btn-sm btn-danger">Grubu Ayır</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="table-layout" style="margin-top: 30px;">
+        <h3 class="table-title">Masa Düzeni Yönetimi</h3>
+        <p>Masaları sürükleyerek konumlarını değiştirebilirsiniz.</p>
+        
+        {% for table in tables %}
+            <div class="table-item {{ table.status }}" style="width: 100px; height: 100px; left: {{ table.x_position }}px; top: {{ table.y_position }}px;" data-table-id="{{ table.id }}" draggable="true">
+                <div class="table-name">{{ table.name }}</div>
+                <div class="table-capacity">{{ table.capacity }} Kişilik</div>
+            </div>
+        {% endfor %}
+        
+        {% for group in table_groups %}
+            <div class="table-group" style="position: absolute; border: 2px dashed var(--primary-color); background-color: rgba(230, 59, 46, 0.1); z-index: -1;">
+                {% set tables_in_group = db.execute('SELECT t.* FROM tables t JOIN table_group_members tgm ON t.id = tgm.table_id WHERE tgm.group_id = ?', (group.id,)).fetchall() %}
+                
+                {% if tables_in_group %}
+                    {% set min_x = tables_in_group|map(attribute='x_position')|min %}
+                    {% set min_y = tables_in_group|map(attribute='y_position')|min %}
+                    {% set max_x = tables_in_group|map(attribute='x_position')|max + 100 %}
+                    {% set max_y = tables_in_group|map(attribute='y_position')|max + 100 %}
+                    
+                    <div style="position: absolute; left: {{ min_x - 10 }}px; top: {{ min_y - 10 }}px; width: {{ max_x - min_x + 20 }}px; height: {{ max_y - min_y + 20 }}px;">
+                        <div style="position: absolute; top: -25px; left: 0; font-weight: bold; color: var(--primary-color);">
+                            Grup: {{ group.name }} ({{ group.capacity }} Kişilik)
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Yeni Masa Ekleme Modal -->
+<div id="add-table-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2>Yeni Masa Ekle</h2>
+        <form id="add-table-form">
+            <div class="form-group">
+                <label for="table-name">Masa Adı:</label>
+                <input type="text" id="table-name" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="table-capacity">Kapasite:</label>
+                <input type="number" id="table-capacity" class="form-control" min="1" required>
+            </div>
+            <div class="form-group">
+                <label for="table-type">Tip:</label>
+                <select id="table-type" class="form-control" required>
+                    <option value="kare">Kare</option>
+                    <option value="yuvarlak">Yuvarlak</option>
+                    <option value="diğer">Diğer</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">Ekle</button>
+        </form>
+    </div>
+</div>
+
+<!-- Masa Düzenleme Modal -->
+<div id="edit-table-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2>Masa Düzenle</h2>
+        <form id="edit-table-form">
+            <input type="hidden" id="edit-table-id">
+            <div class="form-group">
+                <label for="edit-table-name">Masa Adı:</label>
+                <input type="text" id="edit-table-name" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="edit-table-capacity">Kapasite:</label>
+                <input type="number" id="edit-table-capacity" class="form-control" min="1" required>
+            </div>
+            <div class="form-group">
+                <label for="edit-table-type">Tip:</label>
+                <select id="edit-table-type" class="form-control" required>
+                    <option value="kare">Kare</option>
+                    <option value="yuvarlak">Yuvarlak</option>
+                    <option value="diğer">Diğer</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">Güncelle</button>
+        </form>
+    </div>
+</div>
+
+<!-- Masa Birleştirme Modal -->
+<div id="merge-tables-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2>Masaları Birleştir</h2>
+        <form id="merge-tables-form">
+            <div class="form-group">
+                <label for="group-name">Grup Adı:</label>
+                <input type="text" id="group-name" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Seçilen Masalar:</label>
+                <ul id="selected-tables-list"></ul>
+            </div>
+            <button type="submit" class="btn btn-primary">Birleştir</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Modal elementleri
+        const addTableModal = document.getElementById('add-table-modal');
+        const editTableModal = document.getElementById('edit-table-modal');
+        const mergeTablesModal = document.getElementById('merge-tables-modal');
+        const addTableBtn = document.getElementById('add-table-btn');
+        const mergeTablesBtn = document.getElementById('merge-tables-btn');
+        const closeButtons = document.querySelectorAll('.close');
+        
+        // Modal açma/kapama
+        addTableBtn.addEventListener('click', function() {
+            addTableModal.style.display = 'block';
+        });
+        
+        mergeTablesBtn.addEventListener('click', function() {
+            // Seçili masaları listele
+            const selectedTables = document.querySelectorAll('.table-checkbox:checked');
+            const selectedTablesList = document.getElementById('selected-tables-list');
+            selectedTablesList.innerHTML = '';
+            
+            selectedTables.forEach(function(checkbox) {
+                const tableId = checkbox.getAttribute('data-table-id');
+                const tableName = checkbox.closest('tr').querySelector('td:nth-child(2)').textContent;
+                
+                const listItem = document.createElement('li');
+                listItem.textContent = tableName;
+                listItem.setAttribute('data-table-id', tableId);
+                selectedTablesList.appendChild(listItem);
+            });
+            
+            mergeTablesModal.style.display = 'block';
+        });
+        
+        document.querySelectorAll('.edit-table-btn').forEach(function(button) {
+            button.addEventListener('click', function() {
+                const tableId = this.getAttribute('data-table-id');
+                const tableName = this.getAttribute('data-table-name');
+                const tableCapacity = this.getAttribute('data-table-capacity');
+                const tableType = this.getAttribute('data-table-type');
+                
+                document.getElementById('edit-table-id').value = tableId;
+                document.getElementById('edit-table-name').value = tableName;
+                document.getElementById('edit-table-capacity').value = tableCapacity;
+                document.getElementById('edit-table-type').value = tableType;
+                
+                editTableModal.style.display = 'block';
+            });
+        });
+        
+        closeButtons.forEach(function(button) {
+            button.addEventListener('click', function() {
+                addTableModal.style.display = 'none';
+                editTableModal.style.display = 'none';
+                mergeTablesModal.style.display = 'none';
+            });
+        });
+        
+        // Checkbox değişikliklerini izle
+        document.querySelectorAll('.table-checkbox').forEach(function(checkbox) {
+            checkbox.addEventListener('change', function() {
+                const checkedBoxes = document.querySelectorAll('.table-checkbox:checked');
+                mergeTablesBtn.disabled = checkedBoxes.length < 2;
+            });
+        });
+        
+        // Yeni masa ekleme formu
+        document.getElementById('add-table-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const name = document.getElementById('table-name').value;
+            const capacity = document.getElementById('table-capacity').value;
+            const type = document.getElementById('table-type').value;
+            
+            fetch('/tables/api/add-table', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCsrfToken()
+                },
+                body: JSON.stringify({
+                    name: name,
+                    capacity: parseInt(capacity),
+                    type: type,
+                    x_position: 100,
+                    y_position: 100
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    alert('Hata: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Hata:', error);
+                alert('Bir hata oluştu. Lütfen tekrar deneyin.');
+            });
+        });
+        
+        // Masa düzenleme formu
+        document.getElementById('edit-table-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const tableId = document.getElementById('edit-table-id').value;
+            const name = document.getElementById('edit-table-name').value;
+            const capacity = document.getElementById('edit-table-capacity').value;
+            const type = document.getElementById('edit-table-type').value;
+            
+            fetch(`/tables/api/update-table/${tableId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCsrfToken()
+                },
+                body: JSON.stringify({
+                    name: name,
+                    capacity: parseInt(capacity),
+                    type: type
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    alert('Hata: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Hata:', error);
+                alert('Bir hata oluştu. Lütfen tekrar deneyin.');
+            });
+        });
+        
+        // Masa birleştirme formu
+        document.getElementById('merge-tables-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const groupName = document.getElementById('group-name').value;
+            const selectedTables = document.querySelectorAll('#selected-tables-list li');
+            const tableIds = Array.from(selectedTables).map(li => li.getAttribute('data-table-id'));
+            
+            fetch('/tables/api/merge-tables', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCsrfToken()
+                },
+                body: JSON.stringify({
+                    name: groupName,
+                    table_ids: tableIds
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    alert('Hata: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Hata:', error);
+                alert('Bir hata oluştu. Lütfen tekrar deneyin.');
+            });
+        });
+        
+        // Masa silme işlemi
+        document.querySelectorAll('.delete-table-btn').forEach(function(button) {
+            button.addEventListener('click', function() {
+                if (confirm('Bu masayı silmek istediğinizden emin misiniz?')) {
+                    const tableId = this.getAttribute('data-table-id');
+                    
+                    fetch(`/tables/api/delete-table/${tableId}`, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': getCsrfToken()
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            window.location.reload();
+                        } else {
+                            alert('Hata: ' + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Hata:', error);
+                        alert('Bir hata oluştu. Lütfen tekrar deneyin.');
+                    });
+                }
+            });
+        });
+        
+        // Sürükle-bırak işlemleri
+        const tableItems = document.querySelectorAll('.table-item');
+        let draggedItem = null;
+        let initialX, initialY;
+        let offsetX, offsetY;
+        
+        tableItems.forEach(function(item) {
+            item.addEventListener('dragstart', function(e) {
+                draggedItem = this;
+                const rect = this.getBoundingClientRect();
+                offsetX = e.clientX - rect.left;
+                offsetY = e.clientY - rect.top;
+                
+                initialX = parseInt(this.style.left);
+                initialY = parseInt(this.style.top);
+                
+                setTimeout(() => {
+                    this.style.opacity = '0.5';
+                }, 0);
+            });
+            
+            item.addEventListener('dragend', function() {
+                this.style.opacity = '1';
+                draggedItem = null;
+            });
+        });
+        
+        const tableLayout = document.querySelector('.table-layout');
+        
+        tableLayout.addEventListener('dragover', function(e) {
+            e.preventDefault();
+        });
+        
+        tableLayout.addEventListener('drop', function(e) {
+            e.preventDefault();
+            
+            if (draggedItem) {
+                const rect = tableLayout.getBoundingClientRect();
+                let newX = e.clientX - rect.left - offsetX;
+                let newY = e.clientY - rect.top - offsetY;
+                
+                // Sınırlar içinde kaldığından emin ol
+                newX = Math.max(0, Math.min(newX, rect.width - 100));
+                newY = Math.max(0, Math.min(newY, rect.height - 100));
+                
+                draggedItem.style.left = newX + 'px';
+                draggedItem.style.top = newY + 'px';
+                
+                // Konum değişikliğini API'ye gönder
+                const tableId = draggedItem.getAttribute('data-table-id');
+                
+                fetch('/tables/api/update-table-position', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken()
+                    },
+                    body: JSON.stringify({
+                        table_id: tableId,
+                        x_position: newX,
+                        y_position: newY
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.success) {
+                        // Hata durumunda orijinal konuma geri dön
+                        draggedItem.style.left = initialX + 'px';
+                        draggedItem.style.top = initialY + 'px';
+                        alert('Konum güncellenemedi: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Hata:', error);
+                    // Hata durumunda orijinal konuma geri dön
+                    draggedItem.style.left = initialX + 'px';
+                    draggedItem.style.top = initialY + 'px';
+                    alert('Bir hata oluştu. Lütfen tekrar deneyin.');
+                });
+            }
+        });
+        
+        // CSRF token alma fonksiyonu
+        function getCsrfToken() {
+            return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        }
+    });
+</script>
+{% endblock %}

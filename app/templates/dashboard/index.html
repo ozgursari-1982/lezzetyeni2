@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Dashboard - Restoran Rezervasyon Sistemi{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;700&family=Open+Sans:wght@400;600;700&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <div class="dashboard">
+        <div class="dashboard-header">
+            <h1 class="dashboard-title">Dashboard</h1>
+            <h2 class="dashboard-subtitle cursive">Restoran Yönetim Paneli</h2>
+            
+            <div class="date-filter">
+                <form action="{{ url_for('dashboard.index') }}" method="get">
+                    <label for="date">Tarih:</label>
+                    <input type="date" id="date" name="date" value="{{ selected_date.isoformat() }}">
+                    <button type="submit" class="btn btn-primary">Filtrele</button>
+                </form>
+            </div>
+        </div>
+        
+        <div class="widget-container">
+            <div class="widget">
+                <div class="widget-title">Bekleyen Rezervasyonlar</div>
+                <div class="widget-value">{{ pending_count }}</div>
+            </div>
+            
+            <div class="widget">
+                <div class="widget-title">İçerideki Misafirler</div>
+                <div class="widget-value">{{ guest_count }}</div>
+            </div>
+            
+            <div class="widget">
+                <div class="widget-title">Boş Masalar</div>
+                <div class="widget-value">{{ empty_tables }}</div>
+            </div>
+            
+            <div class="widget">
+                <div class="widget-title">Dolu/Rezerve Masalar</div>
+                <div class="widget-value">{{ occupied_tables }}</div>
+            </div>
+            
+            <div class="widget">
+                <div class="widget-title">Gelmeyen Rezervasyonlar</div>
+                <div class="widget-value">{{ no_show_count }}</div>
+            </div>
+        </div>
+        
+        <div class="table-container">
+            <div class="table-header">
+                <h3 class="table-title">Bekleyen Rezervasyonlar</h3>
+                <a href="{{ url_for('reservations.new') }}" class="btn btn-primary">Yeni Rezervasyon</a>
+            </div>
+            
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Saat</th>
+                        <th>Müşteri</th>
+                        <th>Telefon</th>
+                        <th>Kişi Sayısı</th>
+                        <th>Masa/Grup</th>
+                        <th>Durum</th>
+                        <th>İşlemler</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for reservation in pending_reservations %}
+                    <tr>
+                        <td>{{ reservation.start_time.strftime('%H:%M') }} - {{ reservation.end_time.strftime('%H:%M') }}</td>
+                        <td>{{ reservation.customer_name }}</td>
+                        <td>{{ reservation.phone }}</td>
+                        <td>{{ reservation.party_size }}</td>
+                        <td>
+                            {% set tables = namespace(list=[]) %}
+                            {% for table in db.execute('SELECT t.name FROM tables t JOIN reservation_tables rt ON t.id = rt.table_id WHERE rt.reservation_id = ?', (reservation.id,)).fetchall() %}
+                                {% set tables.list = tables.list + [table.name] %}
+                            {% endfor %}
+                            
+                            {% set group = db.execute('SELECT tg.name FROM table_groups tg JOIN reservation_tables rt ON tg.id = rt.table_group_id WHERE rt.reservation_id = ?', (reservation.id,)).fetchone() %}
+                            
+                            {% if tables.list %}
+                                {{ tables.list|join(', ') }}
+                            {% elif group %}
+                                Grup: {{ group.name }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td><span class="status-pending">Bekliyor</span></td>
+                        <td>
+                            <form action="{{ url_for('reservations.confirm_arrival', id=reservation.id) }}" method="post" style="display: inline;">
+                                <button type="submit" class="btn btn-success">Geldi</button>
+                            </form>
+                            <form action="{{ url_for('reservations.confirm_no_show', id=reservation.id) }}" method="post" style="display: inline;">
+                                <button type="submit" class="btn btn-danger">Gelmedi</button>
+                            </form>
+                            <a href="{{ url_for('reservations.edit', id=reservation.id) }}" class="btn btn-secondary">Düzenle</a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" style="text-align: center;">Bekleyen rezervasyon bulunmuyor.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="table-container">
+            <div class="table-header">
+                <h3 class="table-title">İçerideki Misafirler</h3>
+            </div>
+            
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Giriş Saati</th>
+                        <th>Müşteri</th>
+                        <th>Telefon</th>
+                        <th>Kişi Sayısı</th>
+                        <th>Masa/Grup</th>
+                        <th>Durum</th>
+                        <th>İşlemler</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for reservation in current_guests %}
+                    <tr>
+                        <td>{{ reservation.start_time.strftime('%H:%M') }}</td>
+                        <td>{{ reservation.customer_name }}</td>
+                        <td>{{ reservation.phone }}</td>
+                        <td>{{ reservation.party_size }}</td>
+                        <td>
+                            {% set tables = namespace(list=[]) %}
+                            {% for table in db.execute('SELECT t.name, t.id FROM tables t JOIN reservation_tables rt ON t.id = rt.table_id WHERE rt.reservation_id = ?', (reservation.id,)).fetchall() %}
+                                {% set tables.list = tables.list + [table] %}
+                            {% endfor %}
+                            
+                            {% set group = db.execute('SELECT tg.name FROM table_groups tg JOIN reservation_tables rt ON tg.id = rt.table_group_id WHERE rt.reservation_id = ?', (reservation.id,)).fetchone() %}
+                            
+                            {% if tables.list %}
+                                {% for table in tables.list %}
+                                    {{ table.name }}
+                                    <form action="{{ url_for('tables.clear_table', table_id=table.id) }}" method="post" style="display: inline;">
+                                        <button type="submit" class="btn btn-sm btn-danger">Boşalt</button>
+                                    </form>
+                                    {% if not loop.last %}, {% endif %}
+                                {% endfor %}
+                            {% elif group %}
+                                Grup: {{ group.name }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td><span class="status-completed">İçeride</span></td>
+                        <td>
+                            <a href="{{ url_for('reservations.edit', id=reservation.id) }}" class="btn btn-secondary">Düzenle</a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" style="text-align: center;">İçeride misafir bulunmuyor.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="table-container">
+            <div class="table-header">
+                <h3 class="table-title">Gelmeyen Müşteriler</h3>
+            </div>
+            
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Müşteri</th>
+                        <th>Telefon</th>
+                        <th>Planlanan Saat</th>
+                        <th>İşaretlenme Zamanı</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for reservation in no_shows %}
+                    <tr>
+                        <td>{{ reservation.customer_name }}</td>
+                        <td>{{ reservation.phone }}</td>
+                        <td>{{ reservation.start_time.strftime('%H:%M') }}</td>
+                        <td>{{ reservation.updated_at.strftime('%H:%M') }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" style="text-align: center;">Gelmeyen müşteri bulunmuyor.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

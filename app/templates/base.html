@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Restoran Rezervasyon Sistemi{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;700&family=Open+Sans:wght@400;600;700&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="logo">
+            <a href="{{ url_for('index') }}">Lezzet</a>
+        </div>
+        <ul class="nav-menu">
+            <li><a href="{{ url_for('index') }}">Ana Sayfa</a></li>
+            <li><a href="{{ url_for('reservations') }}">Rezervasyonlar</a></li>
+            <li><a href="{{ url_for('tables') }}">Masa Düzeni</a></li>
+            <li><a href="{{ url_for('table_management') }}">Masa Yönetimi</a></li>
+            <li><a href="{{ url_for('availability_schedule') }}">Müsaitlik Çizelgesi</a></li>
+        </ul>
+        <a href="{{ url_for('new_reservation') }}" class="btn-reserve">Yeni Rezervasyon</a>
+    </header>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <ul class="sidebar-menu">
+            <li class="{% if request.endpoint == 'index' %}active{% endif %}">
+                <a href="{{ url_for('index') }}"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+            </li>
+            <li class="{% if request.endpoint == 'reservations' %}active{% endif %}">
+                <a href="{{ url_for('reservations') }}"><i class="fas fa-calendar-alt"></i> Rezervasyonlar</a>
+            </li>
+            <li class="{% if request.endpoint == 'new_reservation' %}active{% endif %}">
+                <a href="{{ url_for('new_reservation') }}"><i class="fas fa-plus-circle"></i> Yeni Rezervasyon</a>
+            </li>
+            <li class="{% if request.endpoint == 'tables' %}active{% endif %}">
+                <a href="{{ url_for('tables') }}"><i class="fas fa-th"></i> Masa Düzeni</a>
+            </li>
+            <li class="{% if request.endpoint == 'table_management' %}active{% endif %}">
+                <a href="{{ url_for('table_management') }}"><i class="fas fa-edit"></i> Masa Yönetimi</a>
+            </li>
+            <li class="{% if request.endpoint == 'availability_schedule' %}active{% endif %}">
+                <a href="{{ url_for('availability_schedule') }}"><i class="fas fa-clock"></i> Müsaitlik Çizelgesi</a>
+            </li>
+            <li class="{% if request.endpoint == 'customers' %}active{% endif %}">
+                <a href="{{ url_for('customers') }}"><i class="fas fa-users"></i> Müşteriler</a>
+            </li>
+            <li class="{% if request.endpoint == 'settings' %}active{% endif %}">
+                <a href="{{ url_for('settings') }}"><i class="fas fa-cog"></i> Ayarlar</a>
+            </li>
+            <li>
+                <a href="{{ url_for('logout') }}"><i class="fas fa-sign-out-alt"></i> Çıkış</a>
+            </li>
+        </ul>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Flash Messages -->
+        <div class="flash-container">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="flash flash-{{ category }}">
+                            {{ message }}
+                            <button class="flash-close">&times;</button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+        </div>
+
+        <!-- Page Content -->
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- JavaScript -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

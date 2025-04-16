@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}500 - Sunucu Hatası{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="error-container">
+        <h1 class="error-title">500</h1>
+        <h2 class="error-subtitle">Sunucu Hatası</h2>
+        <p class="error-message">Üzgünüz, sunucuda bir hata oluştu. Lütfen daha sonra tekrar deneyin veya yönetici ile iletişime geçin.</p>
+        <a href="{{ url_for('index') }}" class="btn btn-primary">Ana Sayfaya Dön</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .error-container {
+        text-align: center;
+        padding: 100px 0;
+    }
+    
+    .error-title {
+        font-size: 120px;
+        color: var(--primary-color);
+        margin-bottom: 0;
+    }
+    
+    .error-subtitle {
+        font-size: 36px;
+        margin-bottom: 20px;
+    }
+    
+    .error-message {
+        font-size: 18px;
+        margin-bottom: 30px;
+    }
+</style>
+{% endblock %}

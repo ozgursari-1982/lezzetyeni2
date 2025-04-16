@@ -1,0 +1,453 @@
+{% extends "base.html" %}
+
+{% block title %}Yeni Rezervasyon - Restoran Rezervasyon Sistemi{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="form-container">
+        <h1 class="form-title">Yeni Rezervasyon</h1>
+        <h2 class="form-subtitle cursive">Rezervasyon Bilgilerini Girin</h2>
+        
+        <form action="{{ url_for('reservations.new') }}" method="post" id="reservation-form">
+            <div class="form-tabs">
+                <div class="tab-header">
+                    <div class="tab active" data-tab="customer-info">1. Müşteri Bilgileri</div>
+                    <div class="tab" data-tab="reservation-details">2. Rezervasyon Detayları</div>
+                    <div class="tab" data-tab="table-selection">3. Masa Seçimi</div>
+                </div>
+                
+                <div class="tab-content">
+                    <!-- Müşteri Bilgileri -->
+                    <div class="tab-pane active" id="customer-info">
+                        <div class="form-group">
+                            <label for="customer_name">Müşteri Adı Soyadı: <span class="required">*</span></label>
+                            <input type="text" id="customer_name" name="customer_name" class="form-control" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="phone">Telefon: <span class="required">*</span></label>
+                            <input type="tel" id="phone" name="phone" class="form-control" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="email">E-posta:</label>
+                            <input type="email" id="email" name="email" class="form-control">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="party_size">Kişi Sayısı: <span class="required">*</span></label>
+                            <input type="number" id="party_size" name="party_size" class="form-control" min="1" required>
+                        </div>
+                        
+                        <div class="form-buttons">
+                            <button type="button" class="btn btn-primary next-tab">İleri</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Rezervasyon Detayları -->
+                    <div class="tab-pane" id="reservation-details">
+                        <div class="form-group">
+                            <label for="reservation_date">Tarih: <span class="required">*</span></label>
+                            <input type="date" id="reservation_date" name="reservation_date" class="form-control" value="{{ default_date.isoformat() }}" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="start_time">Başlangıç Saati: <span class="required">*</span></label>
+                            <input type="time" id="start_time" name="start_time" class="form-control" value="{{ default_time.strftime('%H:%M') }}" required>
+                            
+                            <div class="quick-time-buttons">
+                                <button type="button" class="btn btn-sm btn-secondary quick-time" data-time="18:00">18:00</button>
+                                <button type="button" class="btn btn-sm btn-secondary quick-time" data-time="19:00">19:00</button>
+                                <button type="button" class="btn btn-sm btn-secondary quick-time" data-time="20:00">20:00</button>
+                                <button type="button" class="btn btn-sm btn-secondary quick-time" data-time="21:00">21:00</button>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="duration">Süre (saat): <span class="required">*</span></label>
+                            <select id="duration" name="duration" class="form-control" required>
+                                <option value="1">1 saat</option>
+                                <option value="2" selected>2 saat</option>
+                                <option value="3">3 saat</option>
+                                <option value="4">4 saat</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="special_requests">Özel Talepler:</label>
+                            <textarea id="special_requests" name="special_requests" class="form-control" rows="3"></textarea>
+                        </div>
+                        
+                        <div class="form-buttons">
+                            <button type="button" class="btn btn-secondary prev-tab">Geri</button>
+                            <button type="button" class="btn btn-primary next-tab" id="check-availability">İleri</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Masa Seçimi -->
+                    <div class="tab-pane" id="table-selection">
+                        <div class="form-group">
+                            <label>Müsait Masalar:</label>
+                            <div id="available-tables-container" class="table-selection-grid">
+                                <p>Lütfen önce tarih, saat ve kişi sayısı bilgilerini girin.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Müsait Masa Grupları:</label>
+                            <div id="available-groups-container" class="table-selection-grid">
+                                <p>Lütfen önce tarih, saat ve kişi sayısı bilgilerini girin.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Seçilen Masalar/Grup:</label>
+                            <div id="selected-tables-summary"></div>
+                        </div>
+                        
+                        <div class="form-buttons">
+                            <button type="button" class="btn btn-secondary prev-tab">Geri</button>
+                            <button type="submit" class="btn btn-primary">Rezervasyon Oluştur</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-tabs {
+        margin-top: 30px;
+    }
+    
+    .tab-header {
+        display: flex;
+        border-bottom: 1px solid var(--border-color);
+        margin-bottom: 20px;
+    }
+    
+    .tab {
+        padding: 10px 20px;
+        cursor: pointer;
+        border-bottom: 3px solid transparent;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    
+    .tab.active {
+        border-bottom-color: var(--primary-color);
+        color: var(--primary-color);
+    }
+    
+    .tab-pane {
+        display: none;
+    }
+    
+    .tab-pane.active {
+        display: block;
+    }
+    
+    .form-buttons {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 30px;
+    }
+    
+    .quick-time-buttons {
+        margin-top: 10px;
+    }
+    
+    .required {
+        color: var(--primary-color);
+    }
+    
+    .table-selection-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 15px;
+        margin-top: 10px;
+        margin-bottom: 20px;
+    }
+    
+    .table-card {
+        border: 2px solid var(--border-color);
+        border-radius: var(--border-radius);
+        padding: 15px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .table-card:hover {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 5px rgba(230, 59, 46, 0.3);
+    }
+    
+    .table-card.selected {
+        border-color: var(--primary-color);
+        background-color: rgba(230, 59, 46, 0.1);
+    }
+    
+    .table-card.capacity-match {
+        border-color: var(--success-color);
+    }
+    
+    .table-card-name {
+        font-weight: 700;
+        margin-bottom: 5px;
+    }
+    
+    .table-card-capacity {
+        font-size: 0.9rem;
+        color: var(--secondary-light);
+    }
+    
+    #selected-tables-summary {
+        padding: 15px;
+        background-color: #f9f9f9;
+        border-radius: var(--border-radius);
+        min-height: 50px;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Tab değiştirme
+        const tabs = document.querySelectorAll('.tab');
+        const tabPanes = document.querySelectorAll('.tab-pane');
+        const nextButtons = document.querySelectorAll('.next-tab');
+        const prevButtons = document.querySelectorAll('.prev-tab');
+        
+        tabs.forEach(function(tab) {
+            tab.addEventListener('click', function() {
+                const tabId = this.getAttribute('data-tab');
+                
+                // Aktif tab'ı değiştir
+                tabs.forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                
+                // Aktif içeriği değiştir
+                tabPanes.forEach(pane => pane.classList.remove('active'));
+                document.getElementById(tabId).classList.add('active');
+            });
+        });
+        
+        nextButtons.forEach(function(button) {
+            button.addEventListener('click', function() {
+                const activeTab = document.querySelector('.tab.active');
+                const nextTab = activeTab.nextElementSibling;
+                
+                if (nextTab) {
+                    nextTab.click();
+                }
+            });
+        });
+        
+        prevButtons.forEach(function(button) {
+            button.addEventListener('click', function() {
+                const activeTab = document.querySelector('.tab.active');
+                const prevTab = activeTab.previousElementSibling;
+                
+                if (prevTab) {
+                    prevTab.click();
+                }
+            });
+        });
+        
+        // Hızlı saat seçimi
+        const quickTimeButtons = document.querySelectorAll('.quick-time');
+        const startTimeInput = document.getElementById('start_time');
+        
+        quickTimeButtons.forEach(function(button) {
+            button.addEventListener('click', function() {
+                const time = this.getAttribute('data-time');
+                startTimeInput.value = time;
+            });
+        });
+        
+        // Müsaitlik kontrolü
+        const checkAvailabilityButton = document.getElementById('check-availability');
+        const reservationDateInput = document.getElementById('reservation_date');
+        const startTimeInput = document.getElementById('start_time');
+        const durationSelect = document.getElementById('duration');
+        const partySizeInput = document.getElementById('party_size');
+        const availableTablesContainer = document.getElementById('available-tables-container');
+        const availableGroupsContainer = document.getElementById('available-groups-container');
+        const selectedTablesSummary = document.getElementById('selected-tables-summary');
+        
+        checkAvailabilityButton.addEventListener('click', function() {
+            const date = reservationDateInput.value;
+            const startTime = startTimeInput.value;
+            const duration = durationSelect.value;
+            const partySize = partySizeInput.value;
+            
+            if (!date || !startTime || !duration || !partySize) {
+                alert('Lütfen tüm gerekli alanları doldurun.');
+                return;
+            }
+            
+            // Bitiş saatini hesapla
+            const [hours, minutes] = startTime.split(':');
+            const startDate = new Date();
+            startDate.setHours(parseInt(hours), parseInt(minutes), 0);
+            const endDate = new Date(startDate.getTime() + duration * 60 * 60 * 1000);
+            const endTime = endDate.getHours().toString().padStart(2, '0') + ':' + endDate.getMinutes().toString().padStart(2, '0');
+            
+            // Müsaitlik kontrolü yap
+            fetch(`/tables/api/check-availability?date=${date}&start_time=${startTime}&end_time=${endTime}&party_size=${partySize}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Müsait masaları göster
+                        availableTablesContainer.innerHTML = '';
+                        
+                        if (data.available_tables.length === 0) {
+                            availableTablesContainer.innerHTML = '<p>Belirtilen kriterlere uygun müsait masa bulunamadı.</p>';
+                        } else {
+                            data.available_tables.forEach(function(table) {
+                                const tableCard = document.createElement('div');
+                                tableCard.className = 'table-card';
+                                if (table.capacity >= partySize && table.capacity <= partySize * 1.5) {
+                                    tableCard.classList.add('capacity-match');
+                                }
+                                tableCard.setAttribute('data-table-id', table.id);
+                                tableCard.setAttribute('data-table-name', table.name);
+                                tableCard.setAttribute('data-table-capacity', table.capacity);
+                                
+                                tableCard.innerHTML = `
+                                    <div class="table-card-name">${table.name}</div>
+                                    <div class="table-card-capacity">${table.capacity} Kişilik</div>
+                                    <input type="checkbox" name="table_id" value="${table.id}" style="display: none;">
+                                `;
+                                
+                                tableCard.addEventListener('click', function() {
+                                    const checkbox = this.querySelector('input[type="checkbox"]');
+                                    const isSelected = this.classList.toggle('selected');
+                                    checkbox.checked = isSelected;
+                                    
+                                    // Masa grubu seçimini temizle
+                                    const groupCards = document.querySelectorAll('#available-groups-container .table-card');
+                                    groupCards.forEach(card => {
+                                        card.classList.remove('selected');
+                                        card.querySelector('input[type="radio"]').checked = false;
+                                    });
+                                    
+                                    updateSelectedTablesSummary();
+                                });
+                                
+                                availableTablesContainer.appendChild(tableCard);
+                            });
+                        }
+                        
+                        // Müsait masa gruplarını göster
+                        availableGroupsContainer.innerHTML = '';
+                        
+                        if (data.available_groups.length === 0) {
+                            availableGroupsContainer.innerHTML = '<p>Belirtilen kriterlere uygun müsait masa grubu bulunamadı.</p>';
+                        } else {
+                            data.available_groups.forEach(function(group) {
+                                const groupCard = document.createElement('div');
+                                groupCard.className = 'table-card';
+                                if (group.capacity >= partySize && group.capacity <= partySize * 1.5) {
+                                    groupCard.classList.add('capacity-match');
+                                }
+                                groupCard.setAttribute('data-group-id', group.id);
+                                groupCard.setAttribute('data-group-name', group.name);
+                                groupCard.setAttribute('data-group-capacity', group.capacity);
+                                
+                                groupCard.innerHTML = `
+                                    <div class="table-card-name">Grup: ${group.name}</div>
+                                    <div class="table-card-capacity">${group.capacity} Kişilik</div>
+                                    <input type="radio" name="table_group_id" value="${group.id}" style="display: none;">
+                                `;
+                                
+                                groupCard.addEventListener('click', function() {
+                                    // Diğer grup seçimlerini temizle
+                                    const otherGroupCards = document.querySelectorAll('#available-groups-container .table-card');
+                                    otherGroupCards.forEach(card => {
+                                        card.classList.remove('selected');
+                                        card.querySelector('input[type="radio"]').checked = false;
+                                    });
+                                    
+                                    // Bu grubu seç
+                                    this.classList.add('selected');
+                                    this.querySelector('input[type="radio"]').checked = true;
+                                    
+                                    // Tekil masa seçimlerini temizle
+                                    const tableCards = document.querySelectorAll('#available-tables-container .table-card');
+                                    tableCards.forEach(card => {
+                                        card.classList.remove('selected');
+                                        card.querySelector('input[type="checkbox"]').checked = false;
+                                    });
+                                    
+                                    updateSelectedTablesSummary();
+                                });
+                                
+                                availableGroupsContainer.appendChild(groupCard);
+                            });
+                        }
+                        
+                        updateSelectedTablesSummary();
+                    } else {
+                        alert('Müsaitlik kontrolü yapılırken bir hata oluştu: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Hata:', error);
+                    alert('Müsaitlik kontrolü yapılırken bir hata oluştu. Lütfen tekrar deneyin.');
+                });
+        });
+        
+        function updateSelectedTablesSummary() {
+            const selectedTables = document.querySelectorAll('#available-tables-container .table-card.selected');
+            const selectedGroup = document.querySelector('#available-groups-container .table-card.selected');
+            
+            if (selectedTables.length > 0) {
+                let totalCapacity = 0;
+                let tableNames = [];
+                
+                selectedTables.forEach(function(table) {
+                    const tableName = table.getAttribute('data-table-name');
+                    const tableCapacity = parseInt(table.getAttribute('data-table-capacity'));
+                    
+                    tableNames.push(tableName);
+                    totalCapacity += tableCapacity;
+                });
+                
+                selectedTablesSummary.innerHTML = `
+                    <p><strong>Seçilen Masalar:</strong> ${tableNames.join(', ')}</p>
+                    <p><strong>Toplam Kapasite:</strong> ${totalCapacity} kişi</p>
+                `;
+            } else if (selectedGroup) {
+                const groupName = selectedGroup.getAttribute('data-group-name');
+                const groupCapacity = selectedGroup.getAttribute('data-group-capacity');
+                
+                selectedTablesSummary.innerHTML = `
+                    <p><strong>Seçilen Grup:</strong> ${groupName}</p>
+                    <p><strong>Kapasite:</strong> ${groupCapacity} kişi</p>
+                `;
+            } else {
+                selectedTablesSummary.innerHTML = '<p>Henüz masa veya grup seçilmedi.</p>';
+            }
+        }
+        
+        // Form gönderilmeden önce kontrol
+        const reservationForm = document.getElementById('reservation-form');
+        
+        reservationForm.addEventListener('submit', function(e) {
+            const selectedTables = document.querySelectorAll('input[name="table_id"]:checked');
+            const selectedGroup = document.querySelector('input[name="table_group_id"]:checked');
+            
+            if (selectedTables.length === 0 && !selectedGroup) {
+                e.preventDefault();
+                alert('Lütfen en az bir masa veya masa grubu seçin.');
+            }
+        });
+    });
+</script>
+{% endblock %}

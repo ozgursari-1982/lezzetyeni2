@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}Rezervasyonlar - Restoran Rezervasyon Sistemi{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="dashboard-header">
+        <h1 class="dashboard-title">Rezervasyonlar</h1>
+        <h2 class="dashboard-subtitle cursive">Tüm Rezervasyonlar</h2>
+        
+        <div class="date-filter">
+            <form action="{{ url_for('reservations.index') }}" method="get">
+                <label for="date">Tarih:</label>
+                <input type="date" id="date" name="date" value="{{ selected_date.isoformat() }}">
+                <button type="submit" class="btn btn-primary">Filtrele</button>
+            </form>
+        </div>
+    </div>
+    
+    <div class="table-container">
+        <div class="table-header">
+            <h3 class="table-title">Rezervasyon Listesi</h3>
+            <a href="{{ url_for('reservations.new') }}" class="btn btn-primary">Yeni Rezervasyon</a>
+        </div>
+        
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Müşteri</th>
+                    <th>Telefon</th>
+                    <th>Kişi Sayısı</th>
+                    <th>Tarih</th>
+                    <th>Saat Aralığı</th>
+                    <th>Masa/Grup</th>
+                    <th>Durum</th>
+                    <th>İşlemler</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for reservation in reservations %}
+                <tr>
+                    <td>{{ reservation.customer_name }}</td>
+                    <td>{{ reservation.phone }}</td>
+                    <td>{{ reservation.party_size }}</td>
+                    <td>{{ reservation.reservation_date.strftime('%d.%m.%Y') }}</td>
+                    <td>{{ reservation.start_time.strftime('%H:%M') }} - {{ reservation.end_time.strftime('%H:%M') }}</td>
+                    <td>
+                        {% set tables = namespace(list=[]) %}
+                        {% for table in db.execute('SELECT t.name FROM tables t JOIN reservation_tables rt ON t.id = rt.table_id WHERE rt.reservation_id = ?', (reservation.id,)).fetchall() %}
+                            {% set tables.list = tables.list + [table.name] %}
+                        {% endfor %}
+                        
+                        {% set group = db.execute('SELECT tg.name FROM table_groups tg JOIN reservation_tables rt ON tg.id = rt.table_group_id WHERE rt.reservation_id = ?', (reservation.id,)).fetchone() %}
+                        
+                        {% if tables.list %}
+                            {{ tables.list|join(', ') }}
+                        {% elif group %}
+                            Grup: {{ group.name }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if reservation.status == 'pending' %}
+                            <span class="status-pending">Bekliyor</span>
+                        {% elif reservation.status == 'completed' %}
+                            <span class="status-completed">Tamamlandı</span>
+                        {% elif reservation.status == 'cancelled' %}
+                            {% if reservation.arrival_status == 'no-show' %}
+                                <span class="status-cancelled">Gelmedi</span>
+                            {% else %}
+                                <span class="status-cancelled">İptal</span>
+                            {% endif %}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if reservation.status == 'pending' %}
+                            <form action="{{ url_for('reservations.confirm_arrival', id=reservation.id) }}" method="post" style="display: inline;">
+                                <button type="submit" class="btn btn-sm btn-success">Geldi</button>
+                            </form>
+                            <form action="{{ url_for('reservations.confirm_no_show', id=reservation.id) }}" method="post" style="display: inline;">
+                                <button type="submit" class="btn btn-sm btn-danger">Gelmedi</button>
+                            </form>
+                            <form action="{{ url_for('reservations.cancel', id=reservation.id) }}" method="post" style="display: inline;">
+                                <button type="submit" class="btn btn-sm btn-warning">İptal</button>
+                            </form>
+                        {% endif %}
+                        <a href="{{ url_for('reservations.edit', id=reservation.id) }}" class="btn btn-sm btn-secondary">Düzenle</a>
+                        <form action="{{ url_for('reservations.delete', id=reservation.id) }}" method="post" style="display: inline;" onsubmit="return confirm('Bu rezervasyonu silmek istediğinizden emin misiniz?');">
+                            <button type="submit" class="btn btn-sm btn-danger">Sil</button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="8" style="text-align: center;">Rezervasyon bulunmuyor.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

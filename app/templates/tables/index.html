@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}Masa Düzeni - Restoran Rezervasyon Sistemi{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="dashboard-header">
+        <h1 class="dashboard-title">Masa Düzeni</h1>
+        <h2 class="dashboard-subtitle cursive">Anlık Durum Görünümü</h2>
+    </div>
+    
+    <div class="legend">
+        <div class="legend-item">
+            <div class="legend-color legend-empty"></div>
+            <span>Boş</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color legend-occupied"></div>
+            <span>Dolu</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color legend-reserved"></div>
+            <span>Rezerve</span>
+        </div>
+    </div>
+    
+    <div class="table-layout">
+        {% for table in tables %}
+            <div class="table-item {{ table.status }}" style="width: 100px; height: 100px; left: {{ table.x_position }}px; top: {{ table.y_position }}px;" data-table-id="{{ table.id }}">
+                <div class="table-name">{{ table.name }}</div>
+                <div class="table-capacity">{{ table.capacity }} Kişilik</div>
+                <div class="table-actions">
+                    <a href="{{ url_for('tables.detail', table_id=table.id) }}" class="btn btn-sm btn-secondary">Detay</a>
+                    {% if table.status == 'occupied' %}
+                        <form action="{{ url_for('tables.clear_table', table_id=table.id) }}" method="post" style="display: inline;">
+                            <button type="submit" class="btn btn-sm btn-danger">Boşalt</button>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+        {% endfor %}
+        
+        {% for group in db.execute('SELECT * FROM table_groups WHERE is_active = 1').fetchall() %}
+            <div class="table-group" style="position: absolute; border: 2px dashed var(--primary-color); background-color: rgba(230, 59, 46, 0.1); z-index: -1;">
+                {% set tables_in_group = db.execute('SELECT t.* FROM tables t JOIN table_group_members tgm ON t.id = tgm.table_id WHERE tgm.group_id = ?', (group.id,)).fetchall() %}
+                
+                {% if tables_in_group %}
+                    {% set min_x = tables_in_group|map(attribute='x_position')|min %}
+                    {% set min_y = tables_in_group|map(attribute='y_position')|min %}
+                    {% set max_x = tables_in_group|map(attribute='x_position')|max + 100 %}
+                    {% set max_y = tables_in_group|map(attribute='y_position')|max + 100 %}
+                    
+                    <div style="position: absolute; left: {{ min_x - 10 }}px; top: {{ min_y - 10 }}px; width: {{ max_x - min_x + 20 }}px; height: {{ max_y - min_y + 20 }}px;">
+                        <div style="position: absolute; top: -25px; left: 0; font-weight: bold; color: var(--primary-color);">
+                            Grup: {{ group.name }} ({{ group.capacity }} Kişilik)
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Masa durumlarını her 30 saniyede bir güncelle
+        setInterval(function() {
+            fetch('/tables/api/get-table-statuses')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        for (const tableId in data.statuses) {
+                            const tableElement = document.querySelector(`.table-item[data-table-id="${tableId}"]`);
+                            if (tableElement) {
+                                // Eski durum sınıflarını kaldır
+                                tableElement.classList.remove('empty', 'occupied', 'reserved');
+                                // Yeni durum sınıfını ekle
+                                tableElement.classList.add(data.statuses[tableId]);
+                                
+                                // Boşalt butonunu güncelle
+                                const actionsDiv = tableElement.querySelector('.table-actions');
+                                if (data.statuses[tableId] === 'occupied') {
+                                    if (!actionsDiv.querySelector('form')) {
+                                        const form = document.createElement('form');
+                                        form.action = `/tables/${tableId}/clear`;
+                                        form.method = 'post';
+                                        form.style.display = 'inline';
+                                        
+                                        const button = document.createElement('button');
+                                        button.type = 'submit';
+                                        button.className = 'btn btn-sm btn-danger';
+                                        button.textContent = 'Boşalt';
+                                        
+                                        form.appendChild(button);
+                                        actionsDiv.appendChild(form);
+                                    }
+                                } else {
+                                    const form = actionsDiv.querySelector('form');
+                                    if (form) {
+                                        actionsDiv.removeChild(form);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                })
+                .catch(error => console.error('Masa durumları güncellenirken hata oluştu:', error));
+        }, 30000);
+    });
+</script>
+{% endblock %}
