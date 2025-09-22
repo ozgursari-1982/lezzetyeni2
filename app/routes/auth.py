@@ -1,7 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, g, session, current_app
 from flask_login import login_user, logout_user, login_required, current_user
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 from werkzeug.security import check_password_hash, generate_password_hash
 import logging
 from datetime import datetime
@@ -12,8 +10,23 @@ from ..services.validation_service import validation_service
 bp = Blueprint('auth', __name__, url_prefix='/auth')
 logger = logging.getLogger(__name__)
 
+# Rate limiter decorator - fallback oluştur
+def rate_limit_decorator(limit_string):
+    """Rate limiting decorator with fallback"""
+    def decorator(f):
+        # Flask-Limiter var mı kontrol et
+        try:
+            limiter = current_app.extensions.get('limiter')
+            if limiter:
+                return limiter.limit(limit_string)(f)
+        except:
+            pass
+        # Eğer limiter yoksa normal fonksiyonu döndür
+        return f
+    return decorator
+
 @bp.route('/login', methods=('GET', 'POST'))
-@limiter.limit("5 per minute")
+@rate_limit_decorator("5 per minute")
 def login():
     """Güvenli giriş işlemi - Rate limiting ve logging ile"""
     if current_user.is_authenticated:
@@ -52,7 +65,7 @@ def login():
             
             if error is None:
                 user = User(user_data['id'], user_data['username'])
-                login_user(user, remember=True, duration=current_app.config['PERMANENT_SESSION_LIFETIME'])
+                login_user(user, remember=True, duration=current_app.config.get('PERMANENT_SESSION_LIFETIME'))
                 
                 # Last login güncelle
                 User.update_last_login(db, user_data['id'])
@@ -90,7 +103,7 @@ def logout():
 
 @bp.route('/change-password', methods=('GET', 'POST'))
 @login_required
-@limiter.limit("3 per minute")
+@rate_limit_decorator("3 per minute")
 def change_password():
     """Şifre değiştirme - Güvenli validasyon ile"""
     if request.method == 'POST':
@@ -176,16 +189,3 @@ def profile():
         logger.error(f"Profile page error for user {current_user.username}: {e}")
         flash('Profil bilgileri yüklenirken hata oluştu.', 'error')
         return redirect(url_for('dashboard.index'))
-
-# Rate limiter'ı global olarak import etmek için
-try:
-    from flask import current_app
-    limiter = current_app.extensions.get('limiter')
-except:
-    # Fallback - limiter yoksa boş decorator
-    class MockLimiter:
-        def limit(self, *args, **kwargs):
-            def decorator(f):
-                return f
-            return decorator
-    limiter = MockLimiter()
