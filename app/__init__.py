@@ -9,6 +9,7 @@ from flask_wtf.csrf import CSRFProtect
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_talisman import Talisman
+from flask_mail import Mail
 from werkzeug.security import generate_password_hash
 from dotenv import load_dotenv
 
@@ -58,8 +59,21 @@ def create_app(config_name=None):
     if config_name is None:
         config_name = os.environ.get('FLASK_ENV', 'development')
     
-    from config import config
-    app.config.from_object(config[config_name])
+    try:
+        from config import config
+        app.config.from_object(config[config_name])
+    except ImportError:
+        # Eğer config dosyası yoksa fallback konfigürasyon
+        app.config.update(
+            SECRET_KEY=os.environ.get('SECRET_KEY') or 'dev-key-change-in-production',
+            DATABASE=os.path.join(app.instance_path, 'restaurant.sqlite'),
+            UPLOAD_FOLDER=os.path.join(app.static_folder, 'uploads'),
+            WTF_CSRF_ENABLED=True,
+            PERMANENT_SESSION_LIFETIME=datetime.timedelta(hours=1),
+            SESSION_COOKIE_SECURE=False,  # Development için
+            SESSION_COOKIE_HTTPONLY=True,
+            SESSION_COOKIE_SAMESITE='Lax'
+        )
     
     # Instance klasörünün var olduğundan emin ol
     try:
@@ -69,7 +83,7 @@ def create_app(config_name=None):
     
     # Upload klasörünü oluştur
     try:
-        os.makedirs(app.config['UPLOAD_FOLDER'])
+        os.makedirs(app.config.get('UPLOAD_FOLDER', os.path.join(app.static_folder, 'uploads')))
     except OSError:
         pass
     
@@ -92,10 +106,14 @@ def create_app(config_name=None):
     
     # Rate limiting
     limiter = Limiter(
-        app,
+        app=app,
         key_func=get_remote_address,
-        default_limits=["200 per day", "50 per hour"]
+        default_limits=["200 per day", "50 per hour"],
+        storage_uri="memory://"
     )
+    
+    # Mail setup
+    mail = Mail(app)
     
     # HTTPS ve güvenlik headers (sadece production'da)
     if app.config.get('FORCE_HTTPS', False):
@@ -149,6 +167,10 @@ def create_app(config_name=None):
             app.logger.error(f'Error loading user {user_id}: {e}')
         return None
 
+    # Email servisini başlat
+    from .services.email_service import email_service
+    email_service.init_app(app)
+
     # Blueprint'leri kaydet
     from .routes import auth, dashboard, reservations, tables, customers
 
@@ -191,5 +213,37 @@ def create_app(config_name=None):
         response.headers['X-Frame-Options'] = 'DENY'
         response.headers['X-XSS-Protection'] = '1; mode=block'
         return response
+    
+    # Template için global fonksiyonlar
+    @app.template_global()
+    def get_current_year():
+        return datetime.datetime.now().year
+    
+    @app.template_filter('datetime_format')
+    def datetime_format(value, format='%d.%m.%Y %H:%M'):
+        if isinstance(value, str):
+            try:
+                value = datetime.datetime.fromisoformat(value)
+            except ValueError:
+                return value
+        return value.strftime(format)
+    
+    @app.template_filter('date_format')
+    def date_format(value, format='%d.%m.%Y'):
+        if isinstance(value, str):
+            try:
+                value = datetime.date.fromisoformat(value)
+            except ValueError:
+                return value
+        return value.strftime(format)
+    
+    @app.template_filter('time_format')
+    def time_format(value, format='%H:%M'):
+        if isinstance(value, str):
+            try:
+                value = datetime.time.fromisoformat(value)
+            except ValueError:
+                return value
+        return value.strftime(format)
 
     return app
