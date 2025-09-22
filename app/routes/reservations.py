@@ -1,7 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, g, jsonify, current_app
 from flask_login import login_required, current_user
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 import datetime
 import logging
 from typing import Dict, List, Optional
@@ -15,6 +13,19 @@ from ..services.email_service import email_service
 
 bp = Blueprint('reservations', __name__, url_prefix='/reservations')
 logger = logging.getLogger(__name__)
+
+# Rate limiter decorator - fallback oluştur
+def rate_limit_decorator(limit_string):
+    """Rate limiting decorator with fallback"""
+    def decorator(f):
+        try:
+            limiter = current_app.extensions.get('limiter')
+            if limiter:
+                return limiter.limit(limit_string)(f)
+        except:
+            pass
+        return f
+    return decorator
 
 @bp.route('/')
 @login_required
@@ -46,17 +57,20 @@ def index():
             per_page=per_page
         )
         
-        # İstatistikleri al
-        stats = {
-            'total_reservations': Reservation.count_by_date(db, selected_date),
-            'confirmed_count': Reservation.count_by_status(db, selected_date, 'confirmed'),
-            'pending_count': Reservation.count_by_status(db, selected_date, 'pending'),
-            'cancelled_count': Reservation.count_by_status(db, selected_date, 'cancelled'),
-            'no_show_count': Reservation.count_by_status(db, selected_date, 'no_show')
-        }
+        # İstatistikleri al (eğer metodlar varsa)
+        try:
+            stats = {
+                'total_reservations': len(reservations) if reservations else 0,
+                'confirmed_count': len([r for r in reservations if r.get('status') == 'confirmed']) if reservations else 0,
+                'pending_count': len([r for r in reservations if r.get('status') == 'pending']) if reservations else 0,
+                'cancelled_count': len([r for r in reservations if r.get('status') == 'cancelled']) if reservations else 0,
+                'no_show_count': len([r for r in reservations if r.get('status') == 'no_show']) if reservations else 0
+            }
+        except:
+            stats = {'total_reservations': 0, 'confirmed_count': 0, 'pending_count': 0, 'cancelled_count': 0, 'no_show_count': 0}
         
         return render_template('reservations/index.html', 
-                             reservations=reservations, 
+                             reservations=reservations or [], 
                              selected_date=selected_date,
                              stats=stats,
                              current_page=page,
@@ -70,11 +84,13 @@ def index():
                              reservations=[], 
                              selected_date=datetime.date.today(),
                              stats={},
-                             current_page=1)
+                             current_page=1,
+                             search_query='',
+                             status_filter='all')
 
 @bp.route('/new', methods=('GET', 'POST'))
 @login_required
-@limiter.limit("10 per minute")
+@rate_limit_decorator("10 per minute")
 def new():
     """Yeni rezervasyon oluşturma - validation ve email bildirim ile"""
     if request.method == 'POST':
@@ -150,19 +166,23 @@ def new():
             elif table_group_id:
                 Reservation.assign_tables(g.db, new_reservation['id'], table_group_id=table_group_id)
             
-            # Email bildirimi gönder
+            # Email bildirimi gönder (opsiyonel)
             if form_data['email']:
-                reservation_details = {
-                    'id': new_reservation['id'],
-                    'date': reservation_date.strftime('%d.%m.%Y'),
-                    'time': start_time.strftime('%H:%M'),
-                    'party_size': party_size,
-                    'table': get_table_names_for_reservation(g.db, new_reservation['id'])
-                }
-                
-                email_service.send_reservation_confirmation(
-                    form_data['email'], form_data['customer_name'], reservation_details
-                )
+                try:
+                    reservation_details = {
+                        'id': new_reservation['id'],
+                        'date': reservation_date.strftime('%d.%m.%Y'),
+                        'time': start_time.strftime('%H:%M'),
+                        'party_size': party_size,
+                        'table': get_table_names_for_reservation(g.db, new_reservation['id'])
+                    }
+                    
+                    email_service.send_reservation_confirmation(
+                        form_data['email'], form_data['customer_name'], reservation_details
+                    )
+                except Exception as e:
+                    logger.warning(f"Email gönderilemedi: {e}")
+                    # Email hatası rezervasyon oluşturmasını engellemez
             
             flash('Rezervasyon başarıyla oluşturuldu.', 'success')
             logger.info(f"New reservation created by {current_user.username}: ID {new_reservation['id']}")
@@ -187,7 +207,7 @@ def new():
 
 @bp.route('/<int:id>/edit', methods=('GET', 'POST'))
 @login_required
-@limiter.limit("10 per minute")
+@rate_limit_decorator("10 per minute")
 def edit(id):
     """Rezervasyon düzenleme - validation ve logging ile"""
     try:
@@ -313,19 +333,6 @@ def delete(id):
             flash('Rezervasyon bulunamadı.', 'error')
             return redirect(url_for('reservations.index'))
         
-        # Email bildirimi gönder (eğer email varsa)
-        if reservation.email:
-            reservation_details = {
-                'id': reservation.id,
-                'date': reservation.reservation_date.strftime('%d.%m.%Y'),
-                'time': reservation.start_time.strftime('%H:%M'),
-                'party_size': reservation.party_size
-            }
-            
-            email_service.send_cancellation_notification(
-                reservation.email, reservation.customer_name, reservation_details
-            )
-        
         Reservation.delete(db, id)
         
         flash('Rezervasyon başarıyla silindi.', 'success')
@@ -390,19 +397,6 @@ def cancel(id):
         if not reservation:
             flash('Rezervasyon bulunamadı.', 'error')
         else:
-            # Email bildirimi gönder
-            if reservation.email:
-                reservation_details = {
-                    'id': reservation.id,
-                    'date': reservation.reservation_date.strftime('%d.%m.%Y'),
-                    'time': reservation.start_time.strftime('%H:%M'),
-                    'party_size': reservation.party_size
-                }
-                
-                email_service.send_cancellation_notification(
-                    reservation.email, reservation.customer_name, reservation_details
-                )
-            
             Reservation.cancel(db, id)
             flash('Rezervasyon başarıyla iptal edildi.', 'success')
             logger.info(f"Reservation {id} cancelled by {current_user.username}")
@@ -436,8 +430,8 @@ def api_availability():
         available_groups = TableGroup.get_available_groups(db, date, start_time, end_time, party_size)
         
         return jsonify({
-            'available_tables': [dict(table) for table in available_tables],
-            'available_groups': [dict(group) for group in available_groups]
+            'available_tables': [dict(table) for table in available_tables] if available_tables else [],
+            'available_groups': [dict(group) for group in available_groups] if available_groups else []
         })
         
     except Exception as e:
@@ -455,7 +449,7 @@ def check_table_availability(db, table_ids: List[str], table_group_id: Optional[
                 available_tables = Table.get_available_tables(
                     db, reservation_date, start_time, end_time, 1, exclude_res_id=exclude_res_id
                 )
-                available_table_ids = [t['id'] for t in available_tables]
+                available_table_ids = [t['id'] for t in available_tables] if available_tables else []
                 
                 if int(table_id) not in available_table_ids:
                     return 'Seçilen masalardan biri belirtilen zaman aralığında müsait değil.'
@@ -464,7 +458,7 @@ def check_table_availability(db, table_ids: List[str], table_group_id: Optional[
             available_groups = TableGroup.get_available_groups(
                 db, reservation_date, start_time, end_time, party_size, exclude_res_id=exclude_res_id
             )
-            available_group_ids = [g['id'] for g in available_groups]
+            available_group_ids = [g['id'] for g in available_groups] if available_groups else []
             
             if int(table_group_id) not in available_group_ids:
                 return 'Seçilen masa grubu belirtilen zaman aralığında müsait değil.'
@@ -484,7 +478,7 @@ def handle_customer_creation(db, customer_name: str, phone: str, email: str) -> 
             return customer.id
         else:
             new_customer = Customer.create(db, customer_name, phone, email)
-            return new_customer['id']
+            return new_customer['id'] if new_customer else None
             
     except Exception as e:
         logger.error(f"Error handling customer creation: {e}")
@@ -501,15 +495,3 @@ def get_table_names_for_reservation(db, reservation_id: int) -> str:
     except Exception as e:
         logger.error(f"Error getting table names for reservation {reservation_id}: {e}")
         return 'Bilinmeyen masa'
-
-# Rate limiter fallback
-try:
-    from flask import current_app
-    limiter = current_app.extensions.get('limiter')
-except:
-    class MockLimiter:
-        def limit(self, *args, **kwargs):
-            def decorator(f):
-                return f
-            return decorator
-    limiter = MockLimiter()
