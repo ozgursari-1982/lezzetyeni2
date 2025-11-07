@@ -125,6 +125,7 @@ restaurant_reservation_system/
 ├── run.py                    # Uygulamayı çalıştırma betiği
 ├── requirements.txt          # Gerekli Python paketleri
 ├── .env.example              # Environment variables örneği
+├── GITHUB_DOSYA_YUKLEME.md   # GitHub'a dosya yükleme rehberi
 └── README.md                 # Bu dosya
 ```
 
@@ -237,6 +238,8 @@ Hata durumunda `logs/restaurant.log` dosyasını kontrol edin.
 3. Değişikliklerinizi commit edin (`git commit -m 'Add amazing feature'`)
 4. Branch'inizi push edin (`git push origin feature/amazing-feature`)
 5. Pull Request oluşturun
+
+> **Not**: GitHub'a dosya yükleme konusunda detaylı bilgi için [GitHub Dosya Yükleme Rehberi](GITHUB_DOSYA_YUKLEME.md) dosyasına bakın.
 
 ## Lisans
 
