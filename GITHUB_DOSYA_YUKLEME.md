@@ -9,6 +9,7 @@ Bu rehber, elinizdeki dosyaları GitHub repository'sine nasıl yükleyeceğinizi
 4. [Yöntem 2: Git Komut Satırı ile Dosya Yükleme](#yöntem-2-git-komut-satırı-ile-dosya-yükleme)
 5. [.gitignore - Hangi Dosyalar Yüklenmemeli?](#gitignore---hangi-dosyalar-yüklenmemeli)
 6. [Sık Karşılaşılan Sorunlar](#sık-karşılaşılan-sorunlar)
+7. [Faydalı Git Komutları](#faydalı-git-komutları)
 
 ---
 
@@ -53,7 +54,7 @@ Bu yöntem **tek veya birkaç dosya** yüklemek için uygundur.
 
 ### Adım 1: Repository'nize Gidin
 1. GitHub'da oturum açın
-2. Dosya yüklemek istediğiniz repository'ye gidin (örn: `lezzetyeni2`)
+2. Dosya yüklemek istediğiniz repository'ye gidin (örn: `kullanici-adi/proje-adi`)
 
 ### Adım 2: Dosya Ekleyin
 1. **"Add file"** düğmesine tıklayın
@@ -78,20 +79,20 @@ Bu yöntem **çok sayıda dosya veya tüm proje** için önerilir.
 
 ```bash
 # Repository'yi bilgisayarınıza indirin
-git clone https://github.com/ozgursari-1982/lezzetyeni2.git
+git clone https://github.com/kullanici-adi/proje-adi.git
 
 # Proje klasörüne girin
-cd lezzetyeni2
+cd proje-adi
 ```
 
 ### Dosyalarınızı Ekleyin
 
 #### 1. Dosyalarınızı Proje Klasörüne Kopyalayın
-Yüklemek istediğiniz dosyaları `lezzetyeni2` klasörüne kopyalayın.
+Yüklemek istediğiniz dosyaları proje klasörünüze kopyalayın.
 
 Örnek:
 ```
-lezzetyeni2/
+proje-adi/
 ├── app/
 ├── database/
 ├── yeni_menu.pdf          ← Yeni dosyanız
@@ -133,8 +134,8 @@ git push origin master
 
 ```bash
 # 1. Repository'yi clone edin (sadece ilk kez)
-git clone https://github.com/ozgursari-1982/lezzetyeni2.git
-cd lezzetyeni2
+git clone https://github.com/kullanici-adi/proje-adi.git
+cd proje-adi
 
 # 2. Dosyalarınızı kopyalayın
 
@@ -150,7 +151,7 @@ Eğer proje zaten bilgisayarınızda varsa:
 
 ```bash
 # 1. Proje klasörüne gidin
-cd lezzetyeni2
+cd proje-adi
 
 # 2. En son değişiklikleri çekin
 git pull origin main
